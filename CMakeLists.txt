@@ -12,6 +12,7 @@ add_executable (AdventOfCode2021 "AdventOfCode2021.cpp" "AdventOfCode2021.h")
 
 add_subdirectory(dec1)
 add_subdirectory(dec2)
+add_subdirectory(dec3)
 
 add_subdirectory(library)
 
