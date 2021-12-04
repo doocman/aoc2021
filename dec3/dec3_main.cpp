@@ -24,17 +24,16 @@ int main(int argc, char** argv)
     if (argc == 1)
     {
         print_usage();
-        //std::exit(EXIT_SUCCESS);
+        std::exit(EXIT_SUCCESS);
     }
-    if (argc > 3)
+    if (argc > 2)
     {
         std::cerr << "Too many arguments\n";
         print_usage();
         std::exit(EXIT_FAILURE);
     }
 
-    //std::ifstream input(argv[1]);
-    std::ifstream input("C:\\Users\\doocm\\source\\repos\\AdventOfCode2021\\data\\dec3_1.txt");
+    std::ifstream input(argv[1]);
     if (!input.is_open())
     {
         std::format_to(std::ostream_iterator<char>(std::cerr),

@@ -1,9 +1,12 @@
 
 #pragma once
 
+#include <algorithm>
 #include <iterator>
 #include <span>
 #include <ranges>
+
+#include <dooc/strconv.hpp>
 
 namespace dooc
 {
@@ -120,6 +123,7 @@ namespace dooc
         using difference_type = TContainer::difference_type;
         using underlying_value_type = TContainer::value_type;
         using value_type = std::span<underlying_value_type>;
+        using reference = value_type;
         using underlying_iterator = std::remove_reference_t<decltype(std::declval<TContainer>().data())>; //TContainer::pointer;
         using underlying_const_iterator = TContainer::const_pointer;
 
@@ -238,9 +242,17 @@ namespace dooc
         using pointer = std::iterator_traits<TIterator>::pointer;
         using difference_type = std::iterator_traits<TIterator>::difference_type;
         using iterator_category = std::iterator_traits<TIterator>::iterator_category;
-        
-        TIterator underlying_;
-        difference_type stride_;
+
+        TIterator underlying_{};
+        difference_type end_dist_{};
+        difference_type stride_{};
+
+        base_stride_view_iterator() = default;
+        base_stride_view_iterator(TIterator beg, TIterator end, difference_type stride)
+            : underlying_(beg)
+            , end_dist_(std::distance(beg, end))
+            , stride_(stride)
+        {}
 
         constexpr reference operator*() const noexcept
         {
@@ -250,7 +262,9 @@ namespace dooc
         constexpr base_stride_view_iterator& operator+=(difference_type d) noexcept
         {
             using std::advance;
-            advance(underlying_, stride_ * d);
+            auto to_advance = std::min(stride_ * d, end_dist_);
+            advance(underlying_, to_advance);
+            end_dist_ -= to_advance;
             return *this;
         }
 
@@ -301,6 +315,7 @@ namespace dooc
         using size_type = TContainer::size_type;
         using difference_type = TContainer::difference_type;
         using value_type = TContainer::value_type;
+        using reference = TContainer::reference;
         using underlying_iterator = TContainer::iterator;
         using underlying_const_iterator = TContainer::iterator;
 
@@ -331,9 +346,9 @@ namespace dooc
             using namespace std::ranges;
             if (offset_ < ssize(to_view_))
             {
-                return { next(std::ranges::begin(to_view_), offset_), stride_ };
+                return { next(std::ranges::begin(to_view_), offset_), std::ranges::end(to_view_), stride_ };
             }
-            return { std::ranges::end(to_view_), stride_ };
+            return { std::ranges::end(to_view_), std::ranges::end(to_view_), stride_ };
         }
 
         constexpr const_iterator begin() const noexcept
@@ -353,7 +368,7 @@ namespace dooc
             auto s = size();
             if (s > 0)
             {
-                return { next(std::ranges::begin(to_view_), offset_ + s * stride_), stride_ };
+                return { std::ranges::end(to_view_), std::ranges::end(to_view_), stride_ };
             }
             return begin();
         }
@@ -393,4 +408,111 @@ namespace dooc
     //{
     //    return { std::ranges::views::all(v), sr.stride_, sr.offset_ };
     //}
+
+    template <typename TChar, typename TTraits = std::char_traits<TChar>>
+    struct default_str_delimiter
+    {
+        static constexpr std::string_view delims() noexcept
+        {
+            using namespace std::string_view_literals;
+            return " \n"sv;
+        }
+    };
+
+    template <typename TToType, typename TFromChar, typename TCharTraits = std::char_traits<TFromChar>, typename TDelimDef = default_str_delimiter<TFromChar, TCharTraits>>
+    requires(!std::is_reference_v<TToType>)
+    struct from_string_base_it
+    {
+        using str_view = std::basic_string_view<TFromChar, TCharTraits>;
+        using value_type = TToType;
+        using reference = value_type;
+        using difference_type = str_view::difference_type;
+        using iterator_category = std::input_iterator_tag;
+
+        value_type current_value_{};
+        str_view remaining_str_{};
+        typename str_view::const_pointer current_pos_{};
+
+        constexpr from_string_base_it() = default;
+        explicit from_string_base_it(str_view str, value_type = value_type())
+            : from_string_base_it(str, begin(str))
+        {
+        }
+        from_string_base_it(str_view str, typename str_view::iterator start_pos, value_type = value_type())
+            : remaining_str_(str.substr(std::distance(begin(str), start_pos)))
+            , current_pos_(remaining_str_.data())
+        {
+            update_current();
+        }
+
+        value_type operator*() const noexcept(std::is_nothrow_copy_constructible_v<value_type>)
+        {
+            return current_value_;
+        }
+
+        from_string_base_it& operator++() noexcept
+        {
+            update_current();
+            return *this;
+        }
+
+        from_string_base_it operator++(int) noexcept
+        {
+            auto res = *this;
+            ++(*this);
+            return res;
+        }
+
+        bool operator==(from_string_base_it const& rhs) const noexcept
+        {
+            return current_pos_ == rhs.current_pos_;
+        }
+
+    private:
+        void update_current()
+        {
+            current_pos_ = remaining_str_.data();
+            str_view to_convert = remaining_str_.substr(0, remaining_str_.find_first_of(TDelimDef::delims()));
+            remaining_str_.remove_prefix(std::min(remaining_str_.find_first_not_of(TDelimDef::delims(), size(to_convert)), size(remaining_str_)));
+            auto opt_conv = from_string<value_type>(to_convert);
+            if (opt_conv) current_value_ = *opt_conv;
+        }
+    };
+
+    template<typename TPredicate, typename TIterator>
+    concept iterator_predicate = std::semiregular<TPredicate> && requires(TPredicate p) { { p(std::declval<TIterator>()) } -> std::convertible_to<bool>; };
+
+
+    template<std::input_or_output_iterator TIterator, iterator_predicate<TIterator> TPredicate>
+    class generic_sentinel
+    {
+        TPredicate end_predicate_;
+    public:
+        explicit generic_sentinel(TPredicate p, TIterator const& = TIterator())
+            : end_predicate_(std::move(p))
+        {}
+
+        generic_sentinel() = default;
+
+        template<std::input_or_output_iterator TIterator2>
+        //requires std::is_convertible_v<TIterator2, TIterator>
+            constexpr bool operator()(TIterator2 rhs) const
+        {
+            return end_predicate_(rhs);
+        }
+    };
+
+    template<std::input_or_output_iterator TIterator1, iterator_predicate<TIterator1> TPredicate, std::input_or_output_iterator TIterator2>
+    //requires std::is_convertible_v< TIterator2, TIterator1>
+        constexpr bool operator==(generic_sentinel<TIterator1, TPredicate> s, TIterator2 it)
+    {
+        return s(it);
+    }
+
+    template<std::input_or_output_iterator TIterator1, iterator_predicate<TIterator1> TPredicate, std::input_or_output_iterator TIterator2>
+    //requires std::is_convertible_v< TIterator2, TIterator1>
+        constexpr bool operator==(TIterator2 it, generic_sentinel<TIterator1, TPredicate> s)
+    {
+        return s == it;
+    }
 }
