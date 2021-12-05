@@ -39,8 +39,8 @@ int main_dec4()
     std::vector<int> data;
     data.reserve(size(board_str) / 2); // Arbitrary, but it should be safe to assume atleast a factor of 2 smaller.
     {
-        from_string_base_it it(board_str, int());
-        from_string_base_it end_it(board_str, end(board_str), int());
+        auto it = int_from_string_it<int>(board_str);
+        auto end_it = int_from_string_it<int>(board_str, end(board_str));
         std::copy(it, end_it, std::back_inserter(data));
     }
 

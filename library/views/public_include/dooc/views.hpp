@@ -2,6 +2,7 @@
 #pragma once
 
 #include <algorithm>
+#include <concepts>
 #include <iterator>
 #include <span>
 #include <ranges>
@@ -409,22 +410,37 @@ namespace dooc
     //    return { std::ranges::views::all(v), sr.stride_, sr.offset_ };
     //}
 
-    template <typename TChar, typename TTraits = std::char_traits<TChar>>
-    struct default_str_delimiter
+    template <typename TValue, typename TChar, typename TTraits = std::char_traits<TChar>>
+    struct default_str_convert
     {
-        static constexpr std::string_view delims() noexcept
+        using str_view = std::basic_string_view<TChar, TTraits>;
+
+        static constexpr str_view delims() noexcept
         {
             using namespace std::string_view_literals;
-            return " \n"sv;
+            return " \n,"sv;
+        }
+
+    public:
+
+        constexpr std::pair<str_view, std::optional<TValue>> operator()(str_view to_extract)
+        {
+            str_view to_convert = to_extract.substr(0, to_extract.find_first_of(delims()));
+            to_extract.remove_prefix(std::min(to_extract.find_first_not_of(delims(), size(to_convert)), size(to_extract)));
+            auto opt_conv = from_string<TValue>(to_convert);
+            return { to_extract, opt_conv };
         }
     };
 
-    template <typename TToType, typename TFromChar, typename TCharTraits = std::char_traits<TFromChar>, typename TDelimDef = default_str_delimiter<TFromChar, TCharTraits>>
-    requires(!std::is_reference_v<TToType>)
+    template <std::move_constructible TStrConv, typename TFromChar, typename TCharTraits = std::char_traits<TFromChar>>
+    requires requires(TStrConv t) {
+        { t(std::basic_string_view<TFromChar, TCharTraits>()).first } -> std::convertible_to<std::basic_string_view<TFromChar, TCharTraits>>;
+        //{ *(t(std::basic_string_view<TFromChar, TCharTraits>()).second) } -> std::movable;
+    }
     struct from_string_base_it
     {
         using str_view = std::basic_string_view<TFromChar, TCharTraits>;
-        using value_type = TToType;
+        using value_type = std::remove_reference_t<decltype(std::declval<TStrConv>()(str_view()).second.operator *())>;
         using reference = value_type;
         using difference_type = str_view::difference_type;
         using iterator_category = std::input_iterator_tag;
@@ -432,20 +448,27 @@ namespace dooc
         value_type current_value_{};
         str_view remaining_str_{};
         typename str_view::const_pointer current_pos_{};
+        TStrConv convert_;
 
         constexpr from_string_base_it() = default;
-        explicit from_string_base_it(str_view str, value_type = value_type())
-            : from_string_base_it(str, begin(str))
+        from_string_base_it(str_view str, TStrConv str_conv)
+            : from_string_base_it(str, begin(str), str_conv)
         {
         }
-        from_string_base_it(str_view str, typename str_view::iterator start_pos, value_type = value_type())
-            : remaining_str_(str.substr(std::distance(begin(str), start_pos)))
+        from_string_base_it(str_view str, typename str_view::const_iterator start_pos, TStrConv str_conv)
+            : remaining_str_(str.substr(std::distance(cbegin(str), start_pos)))
             , current_pos_(remaining_str_.data())
+            , convert_(std::move(str_conv))
         {
             update_current();
         }
 
-        value_type operator*() const noexcept(std::is_nothrow_copy_constructible_v<value_type>)
+        value_type const& operator*() const noexcept
+        {
+            return current_value_;
+        }
+
+        value_type& operator*() noexcept
         {
             return current_value_;
         }
@@ -472,12 +495,30 @@ namespace dooc
         void update_current()
         {
             current_pos_ = remaining_str_.data();
-            str_view to_convert = remaining_str_.substr(0, remaining_str_.find_first_of(TDelimDef::delims()));
-            remaining_str_.remove_prefix(std::min(remaining_str_.find_first_not_of(TDelimDef::delims(), size(to_convert)), size(remaining_str_)));
-            auto opt_conv = from_string<value_type>(to_convert);
-            if (opt_conv) current_value_ = *opt_conv;
+            auto [new_str, opt_conv] = convert_(remaining_str_);
+            remaining_str_ = new_str;
+            if (opt_conv) current_value_ = std::move(*opt_conv);
         }
     };
+
+    template <std::move_constructible TStrConv, typename TFromChar, typename TCharTraits = std::char_traits<TFromChar>>
+    from_string_base_it(std::basic_string_view<TFromChar, TCharTraits>, TStrConv)->from_string_base_it<TStrConv, TFromChar, TCharTraits>;
+
+    template <std::move_constructible TStrConv, typename TFromChar, typename TCharTraits = std::char_traits<TFromChar>>
+    from_string_base_it(std::basic_string_view<TFromChar, TCharTraits>, typename std::basic_string_view<TFromChar, TCharTraits>::const_iterator, TStrConv)->from_string_base_it<TStrConv, TFromChar, TCharTraits>;
+
+    template <std::integral TValue, std::integral TChar, typename TTraits = std::char_traits<TChar>>
+    constexpr auto int_from_string_it(std::basic_string_view<TChar, TTraits> str, typename std::string_view::const_iterator pos)
+    {
+        using convert_t = default_str_convert<TValue, TChar, TTraits>;
+        return from_string_base_it<convert_t, TChar, TTraits>(str, pos, default_str_convert<TValue, TChar, TTraits>());
+    }
+
+    template <std::integral TValue, std::integral TChar, typename TTraits = std::char_traits<TChar>>
+    constexpr auto int_from_string_it(std::basic_string_view<TChar, TTraits> str, typename std::string_view::difference_type pos = 0)
+    {
+        return int_from_string_it<TValue>(str, begin(str) + pos);
+    }
 
     template<typename TPredicate, typename TIterator>
     concept iterator_predicate = std::semiregular<TPredicate> && requires(TPredicate p) { { p(std::declval<TIterator>()) } -> std::convertible_to<bool>; };
@@ -515,4 +556,87 @@ namespace dooc
     {
         return s == it;
     }
+
+    template <typename T = void>
+    struct pre_increment
+    {
+        template<typename T2>
+            constexpr void operator()(T2& v) const noexcept(noexcept(++v)) requires std::is_same_v<T, void>
+        {
+            ++v;
+        }
+
+            constexpr void operator()(T& v) const noexcept(noexcept(++v)) requires !std::is_same_v<T, void>
+        {
+            ++v;
+        }
+    };
+
+    template <typename TCont, typename TIncOp = pre_increment<>, typename TOrderCmp = std::less<>>
+    class sorted_insert_or_increase_it
+    {
+        TCont* cont_;
+        TIncOp inc_;
+        TOrderCmp cmp_;
+
+        template<typename T>
+        constexpr bool is_eq(T const& l, T const& r) const
+        {
+            return !cmp_(l, r) && !cmp_(r, l);
+        }
+    public:
+
+        using value_type = TCont::value_type;
+        using iterator_category = std::output_iterator_tag;
+
+        struct ref_proxy
+        {
+            sorted_insert_or_increase_it* main_;
+            ref_proxy(sorted_insert_or_increase_it& main)
+                : main_(&main)
+            {
+            }
+
+            template <typename T>
+            //requires std::convertible_to<value_type>
+                ref_proxy& operator=(T&& v)
+            {
+                auto pos = std::find_if(begin(*main_->cont_), end(*main_->cont_), [&v, this](value_type const& rhs) -> bool { return !main_->cmp_(rhs, v); });
+                if (pos != std::ranges::end(*main_->cont_) && main_->is_eq(v, *pos))
+                {
+                    main_->inc_(*pos);
+                }
+                else
+                {
+                    main_->cont_->insert(pos, std::move(v));
+                }
+                return *this;
+            }
+        };
+
+        using reference = ref_proxy;
+
+        explicit sorted_insert_or_increase_it(TCont& cont, TIncOp inc_op = TIncOp{}, TOrderCmp cmp = TOrderCmp{})
+            : cont_(&cont)
+            , inc_(std::move(inc_op))
+            , cmp_(std::move(cmp))
+        {}
+
+        reference operator*()
+        {
+            return { *this };
+        }
+
+        constexpr sorted_insert_or_increase_it& operator++() noexcept
+        {
+            // no op.
+            return *this;
+        }
+
+        constexpr sorted_insert_or_increase_it operator++(int) noexcept
+        {
+            // no op.
+            return *this;
+        }
+    };
 }
