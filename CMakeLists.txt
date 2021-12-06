@@ -15,6 +15,7 @@ add_subdirectory(dec2)
 add_subdirectory(dec3)
 add_subdirectory(dec4)
 add_subdirectory(dec5)
+add_subdirectory(dec6)
 
 add_subdirectory(library)
 
