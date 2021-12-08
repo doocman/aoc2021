@@ -410,7 +410,39 @@ namespace dooc
     //    return { std::ranges::views::all(v), sr.stride_, sr.offset_ };
     //}
 
-    template <typename TValue, typename TChar, typename TTraits = std::char_traits<TChar>>
+    namespace details
+    {
+        template <typename TChar, typename TTraits>
+        struct default_str_delims_v
+        {
+            constexpr std::basic_string_view<TChar, TTraits> operator()() const noexcept
+            {
+                using namespace std::string_view_literals;
+                return " \n,"sv;
+            }
+        };
+    }
+
+    template<typename TChar = char, typename TTraits = std::char_traits<TChar>, typename TDelimsSpec = details::default_str_delims_v<TChar, TTraits>>
+    struct default_str_delims
+    {
+        using str_view = std::basic_string_view<TChar, TTraits>;
+        TDelimsSpec delims_;
+
+        constexpr default_str_delims() = default;
+        explicit constexpr default_str_delims(TDelimsSpec delims)
+            : delims_(std::move(delims))
+        {}
+
+        constexpr std::pair<str_view, str_view> operator()(str_view to_extract) const noexcept
+        {
+            str_view next_e = to_extract.substr(0, to_extract.find_first_of(delims_()));
+            to_extract.remove_prefix(std::min(to_extract.find_first_not_of(delims_(), size(next_e)), size(to_extract)));
+            return { next_e, to_extract };
+        }
+    };
+
+    template <typename TValue, typename TChar, typename TTraits = std::char_traits<TChar>, typename TDelims = default_str_delims<TChar, TTraits>>
     struct default_str_convert
     {
         using str_view = std::basic_string_view<TChar, TTraits>;
@@ -420,15 +452,19 @@ namespace dooc
             using namespace std::string_view_literals;
             return " \n,"sv;
         }
+        TDelims delims_;
 
     public:
+        constexpr default_str_convert() = default;
+        explicit constexpr default_str_convert(TDelims delims)
+            : delims_(std::move(delims))
+        {}
 
         constexpr std::pair<str_view, std::optional<TValue>> operator()(str_view to_extract)
         {
-            str_view to_convert = to_extract.substr(0, to_extract.find_first_of(delims()));
-            to_extract.remove_prefix(std::min(to_extract.find_first_not_of(delims(), size(to_convert)), size(to_extract)));
+            auto [to_convert, next_extraxt] = delims_(to_extract);
             auto opt_conv = from_string<TValue>(to_convert);
-            return { to_extract, opt_conv };
+            return { next_extraxt, opt_conv };
         }
     };
 
