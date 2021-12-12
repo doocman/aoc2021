@@ -43,14 +43,14 @@ namespace dooc
         constexpr octopus_map_t(octopus_map_t&&) noexcept = default;
         constexpr octopus_map_t& operator=(octopus_map_t&&) noexcept = default;
 
-        constexpr octopus_map_t(octopus_map_t const& rhs)
+        octopus_map_t(octopus_map_t const& rhs)
             : all_(rhs.all_)
             , flashes_(rhs.flashes_)
             , h_size_(rhs.h_size_)
         {
             setup_map();
         }
-        constexpr octopus_map_t& operator=(octopus_map_t const& rhs)
+        octopus_map_t& operator=(octopus_map_t const& rhs)
         {
             all_ = rhs.all_;
             flashes_ = rhs.flashes_;
@@ -82,7 +82,7 @@ namespace dooc
         return 0;
     }
 
-    constexpr octopus_map_t step_octopuses(octopus_map_t input)
+    octopus_map_t step_octopuses(octopus_map_t input)
     {
         using value_t = octopus_map_t::value_t;
         std::vector<value_t*> to_flash;
@@ -120,7 +120,7 @@ namespace dooc
         return input;
     }
 
-    constexpr octopus_map_t step_octopuses(octopus_map_t input, std::ptrdiff_t n)
+    octopus_map_t step_octopuses(octopus_map_t input, std::ptrdiff_t n)
     {
         for (auto _: std::views::iota(0, n))
         {
@@ -129,7 +129,7 @@ namespace dooc
         return input;
     }
 
-    constexpr int find_first_sync(octopus_map_t input)
+    int find_first_sync(octopus_map_t input)
     {
         int steps{};
         while (input.flashes_ != std::ssize(input.all_))

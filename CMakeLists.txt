@@ -21,6 +21,7 @@ add_subdirectory(dec8)
 add_subdirectory(dec9)
 add_subdirectory(dec10)
 add_subdirectory(dec11)
+add_subdirectory(dec12)
 
 add_subdirectory(library)
 
