@@ -94,7 +94,6 @@ namespace dooc
             res.first += points->points;
             res.second += points->completion_points;
             line = points->remaining_str;
-            //return { points->points, points->completion_points };
         }
         return res;
     }

@@ -23,26 +23,26 @@ namespace dooc
         TIterator cur_pos_{};
         difference_type span_size_{};
 
-        bunch_base_iterator() = default;
+        constexpr bunch_base_iterator() = default;
 
         template <typename TPtr>
         requires std::is_convertible_v<TPtr, TIterator>
-        bunch_base_iterator(TPtr pos, difference_type span_size)
+            constexpr bunch_base_iterator(TPtr pos, difference_type span_size)
             : cur_pos_(pos)
             , span_size_(span_size)
         {}
 
         template <typename TPtr>
         requires std::is_convertible_v<TPtr, TIterator>
-        bunch_base_iterator(bunch_base_iterator<TPtr> const& rhs)
+            constexpr bunch_base_iterator(bunch_base_iterator<TPtr> const& rhs)
             : cur_pos_(rhs.cur_pos_)
             , span_size_(rhs.span_size_)
         {}
 
-        bunch_base_iterator(bunch_base_iterator const&) = default;
-        bunch_base_iterator& operator=(bunch_base_iterator const&) = default;
-        bunch_base_iterator(bunch_base_iterator &&) noexcept = default;
-        bunch_base_iterator& operator=(bunch_base_iterator &&) noexcept = default;
+        constexpr bunch_base_iterator(bunch_base_iterator const&) = default;
+        constexpr bunch_base_iterator& operator=(bunch_base_iterator const&) = default;
+        constexpr bunch_base_iterator(bunch_base_iterator &&) noexcept = default;
+        constexpr bunch_base_iterator& operator=(bunch_base_iterator &&) noexcept = default;
 
 
 
@@ -141,7 +141,7 @@ namespace dooc
             , span_size_(span_size)
         {}
 
-        iterator begin() noexcept
+        constexpr iterator begin() noexcept
         {
             using std::begin;
             if (to_view_ == nullptr)
@@ -151,17 +151,17 @@ namespace dooc
             return { to_view_->data(), span_size_ };
         }
 
-        const_iterator begin() const noexcept
+        constexpr const_iterator begin() const noexcept
         {
             return const_cast<bunch_view_t*>(this)->begin();
         }
 
-        const_iterator cbegin() const noexcept
+        constexpr const_iterator cbegin() const noexcept
         {
             return begin();
         }
 
-        iterator end() noexcept
+        constexpr iterator end() noexcept
         {
             using std::end;
             if (to_view_ == nullptr)
@@ -175,16 +175,16 @@ namespace dooc
             return { std::next(to_view_->data() + std::ssize(*to_view_), -span_size_ + 1), span_size_ };
         }
 
-        const_iterator end() const noexcept
+        constexpr const_iterator end() const noexcept
         {
             return const_cast<bunch_view_t*>(this)->end();
         }
-        end_sentinel cend() const noexcept
+        constexpr end_sentinel cend() const noexcept
         {
             return end();
         }
 
-        value_type operator[](difference_type index) noexcept
+        constexpr value_type operator[](difference_type index) noexcept
         {
             return *(begin() + index);
         }
@@ -192,26 +192,26 @@ namespace dooc
     };
 
     template <typename TIt1, typename TIt2>
-    auto operator==(bunch_base_iterator<TIt1> lhs, bunch_base_iterator<TIt2> rhs)
+    constexpr auto operator==(bunch_base_iterator<TIt1> lhs, bunch_base_iterator<TIt2> rhs)
     {
         return lhs.cur_pos_ == rhs.cur_pos_;
     }
 
 
     template <typename TIt1, typename TIt2>
-    auto operator<=>(bunch_base_iterator<TIt1> lhs, bunch_base_iterator<TIt2> rhs)
+    constexpr auto operator<=>(bunch_base_iterator<TIt1> lhs, bunch_base_iterator<TIt2> rhs)
     {
         return lhs.cur_pos_ <=> rhs.cur_pos_;
     }
 
     template <typename TIt1, typename TIt2>
-    bool operator==(bunch_end_sentinel<TIt1> lhs, bunch_base_iterator<TIt2> rhs)
+    constexpr bool operator==(bunch_end_sentinel<TIt1> lhs, bunch_base_iterator<TIt2> rhs)
     {
         return std::distance(rhs.cur_pos_, lhs.cur_pos_) < lhs.span_size_;
     }
 
     template <typename TIt1, typename TIt2>
-    bool operator==(bunch_base_iterator<TIt1> lhs, bunch_end_sentinel<TIt2> rhs)
+    constexpr bool operator==(bunch_base_iterator<TIt1> lhs, bunch_end_sentinel<TIt2> rhs)
     {
         return rhs == lhs;
     }
@@ -222,7 +222,7 @@ namespace dooc
 
         difference_type span_size_;
 
-        explicit bunch_view(difference_type span_size) noexcept
+        constexpr explicit bunch_view(difference_type span_size) noexcept
             : span_size_(span_size)
         {
         }
@@ -248,8 +248,8 @@ namespace dooc
         difference_type end_dist_{};
         difference_type stride_{};
 
-        base_stride_view_iterator() = default;
-        base_stride_view_iterator(TIterator beg, TIterator end, difference_type stride)
+        constexpr base_stride_view_iterator() = default;
+        constexpr base_stride_view_iterator(TIterator beg, TIterator end, difference_type stride)
             : underlying_(beg)
             , end_dist_(std::distance(beg, end))
             , stride_(stride)
@@ -305,7 +305,7 @@ namespace dooc
     };
 
     template <typename TIterator1, typename TIterator2>
-    auto operator==(base_stride_view_iterator<TIterator1> const& lhs, base_stride_view_iterator<TIterator2> const& rhs)
+    constexpr auto operator==(base_stride_view_iterator<TIterator1> const& lhs, base_stride_view_iterator<TIterator2> const& rhs)
     {
         return lhs.underlying_ == rhs.underlying_;
     }
@@ -328,7 +328,7 @@ namespace dooc
         difference_type offset_{};
 
         constexpr stride_view_t() = default;
-        stride_view_t(TContainer to_view, difference_type stride, difference_type offset = 0)
+        constexpr stride_view_t(TContainer to_view, difference_type stride, difference_type offset = 0)
             : to_view_(to_view)
             , stride_(stride)
             , offset_(offset)
@@ -392,7 +392,7 @@ namespace dooc
         difference_type stride_;
         difference_type offset_;
 
-        explicit stride_view(difference_type stride, difference_type offset = 0)
+        constexpr explicit stride_view(difference_type stride, difference_type offset = 0)
             : stride_(stride)
             , offset_(offset)
         {}
